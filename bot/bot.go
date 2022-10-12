@@ -163,10 +163,7 @@ func handleTeleCmd(groupID string, chatCmd string) {
 
     switch strSearchResults {
         case Different:
-            helpResVN := "[" + cfg.CmdConfig.DefaultRespMsg["ResponseHelpVN"] + "]"
-            helpResEN := "[" + cfg.CmdConfig.DefaultRespMsg["ResponseHelpEN"] + "]"
-            sendToTelegram(groupID, helpResVN)
-            sendToTelegram(groupID, helpResEN)  
+            sendResponseToUserTelegram(groupID) 
         case AlmostSame:
             var msgResponse string
             _, checkKeyVN := cmdListMapVN[resStr];
@@ -228,6 +225,13 @@ func sendToSerial(msg string) {
 func sendToTelegram(groupID string, msg string) {
     teleDstTopic := strings.Replace(cfg.MqttConfig.TeleDstTopic, "GroupID", groupID, 1)
     mqttClientHandleSerial.Publish(teleDstTopic, 0, false, msg)
+}
+
+func sendResponseToUserTelegram(groupID string) {
+    helpResVN := "[" + cfg.CmdConfig.DefaultRespMsg["ResponseHelpVN"] + "]"
+    helpResEN := "[" + cfg.CmdConfig.DefaultRespMsg["ResponseHelpEN"] + "]"
+    sendToTelegram(groupID, helpResVN)
+    sendToTelegram(groupID, helpResEN)     
 }
 
 
