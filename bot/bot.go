@@ -163,16 +163,11 @@ func handleTeleCmd(groupID string, chatCmd string) {
 
     switch strSearchResults {
         case Different:
-            sendResponseToUserTelegram(groupID) 
+            sendHelpResponseToUserTelegram(groupID) 
+            
         case AlmostSame:
-            var msgResponse string
-            _, checkKeyVN := cmdListMapVN[resStr];
-            if checkKeyVN == true {
-                msgResponse = "[" + cfg.CmdConfig.DefaultRespMsg["HintQuestionVN"] + "/" + resStr + "]"                  
-            }else {
-                msgResponse = "[" + cfg.CmdConfig.DefaultRespMsg["HintQuestionEN"] + "/" + resStr + "]"
-            }
-            sendToTelegram(groupID, msgResponse)
+            SendSuggestionResponseToUserTelegram(groupID, resStr)
+
         case Same:
             scriptVN, checkKeyExistsVN := cmdListMapVN[resStr];
             scriptEN, _ := cmdListMapEN[chatCmd];
@@ -227,11 +222,22 @@ func sendToTelegram(groupID string, msg string) {
     mqttClientHandleSerial.Publish(teleDstTopic, 0, false, msg)
 }
 
-func sendResponseToUserTelegram(groupID string) {
+func sendHelpResponseToUserTelegram(groupID string) {
     helpResVN := "[" + cfg.CmdConfig.DefaultRespMsg["ResponseHelpVN"] + "]"
     helpResEN := "[" + cfg.CmdConfig.DefaultRespMsg["ResponseHelpEN"] + "]"
     sendToTelegram(groupID, helpResVN)
     sendToTelegram(groupID, helpResEN)     
+}
+
+func SendSuggestionResponseToUserTelegram(groupID string, resMsg string) {
+    var msgResponse string
+    _, checkKeyVN := cmdListMapVN[resMsg];
+    if checkKeyVN == true {
+        msgResponse = "[" + cfg.CmdConfig.DefaultRespMsg["HintQuestionVN"] + "/" + resMsg + "]"                  
+    }else {
+        msgResponse = "[" + cfg.CmdConfig.DefaultRespMsg["HintQuestionEN"] + "/" + resMsg + "]"
+    }
+    sendToTelegram(groupID, msgResponse)
 }
 
 
