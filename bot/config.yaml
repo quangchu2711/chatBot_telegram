@@ -12,52 +12,43 @@ MqttConfig        :
 CmdConfig:
 
   ControlLedVN:
-    - ChatCmd: 
-      - 'Bật đèn 1'
+    - ChatCmd          : 'Bật đèn 1'
       DeviceCmd        : 'ONLED: 1'
       ChatResponseMap:
          '1'           : 'Đèn 1 đã bật'
 
-    - ChatCmd: 
-      - 'Tắt đèn 1'
+    - ChatCmd          : 'Tắt đèn 1'
       DeviceCmd        : 'OFFLED: 1'
       ChatResponseMap:
          '0'           : 'Đèn 1 đã tắt'
 
-    - ChatCmd: 
-      - 'Bật đèn 2'   
+    - ChatCmd          : 'Bật đèn 2'   
       DeviceCmd        : 'ONLED: 2'
       ChatResponseMap:
          '1'           : 'Đèn 2 đã bật'
 
-    - ChatCmd: 
-      - 'Tắt đèn 2'
+    - ChatCmd          : 'Tắt đèn 2'
       DeviceCmd        : 'OFFLED: 2'
       ChatResponseMap:
          '0'           : 'Đèn 2 đã tắt'
 
   ControlLedEN:
-    - ChatCmd:        
-      - 'Led 1 on'
+    - ChatCmd          : 'Led 1 on'
       DeviceCmd        : 'ONLED: 1'
       ChatResponseMap:
          '1a'          : 'Led 1 was on'
 
-    - ChatCmd:        
-      - 'Led 1 off'
-      # - 'LED 1 OFF'
+    - ChatCmd          : 'Led 1 off'
       DeviceCmd        : 'OFFLED: 1'
       ChatResponseMap:
          '0'           : 'Led 1 was off'        
 
-    - ChatCmd:        
-      - 'Led 2 on'
+    - ChatCmd          : 'Led 2 on'
       DeviceCmd        : 'ONLED: 2'
       ChatResponseMap:
          '1'           : 'Led 2 was on'
 
-    - ChatCmd: 
-      - 'Led 2 off'
+    - ChatCmd          : 'Led 2 off'
       DeviceCmd        : 'OFFLED: 2'
       ChatResponseMap:
          '0'           : 'Led 2 was off' 
@@ -66,8 +57,8 @@ CmdConfig:
     'ErrorCmd'         : 'Wrong command. Please try again!'
     'TimeoutVN'        : 'Quá thời gian, không nhận được phản hồi từ thiết bị'
     'TimeoutEN'        : 'Time out, no response from device'
-    'ResponseHelpVN'      : 'Yêu cầu không rõ, bạn có thể thử:'
-    'ResponseHelpEN'      : 'Request unknown, you can request:'   
+    'ResponseHelpVN'   : 'Yêu cầu không rõ, bạn có thể thử:'
+    'ResponseHelpEN'   : 'Request unknown, you can request:'   
     'HintQuestionVN'   : 'Có phải bạn muốn ?'
     'HintQuestionEN'   : 'Do you want ?'
 

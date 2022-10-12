@@ -22,14 +22,13 @@ type Mqtt struct {
     Password string
     SerialSrcTopic string
     SerialDstTopic string
-
     TeleSrcTopic string  
     TeleDstTopic string   
 }
 
 
 type LedControlCode struct {
-    ChatCmd []string
+    ChatCmd string
     DeviceCmd string
     ChatResponseMap map[string]string
 }
@@ -37,7 +36,6 @@ type LedControlCode struct {
 type Command struct {
     ControlLedVN []LedControlCode
     ControlLedEN []LedControlCode
-
     DefaultRespMsg map[string]string 
     TickTimeout time.Duration
 }
@@ -118,6 +116,7 @@ func findTheMostSimilarString(str string, strArr[] string) (string, StringSearch
     }else if minNumStep < 7 {
         cmpSta = AlmostSame
     }
+
     return resStr, cmpSta
 }
 
@@ -166,7 +165,6 @@ func handleTeleScript(script *LedControlCode, groupID string, chatCmd string) {
 
 func handleTeleCmd(groupID string, chatCmd string) {  
     resStr, strSearchResults := findTheMostSimilarString(chatCmd, listChatCmds)
-    // fmt.Printf("[cmd: %s - num: %d]\n", resStr, numTransStep)
 
     switch strSearchResults {
         case Different:
@@ -184,7 +182,6 @@ func handleTeleCmd(groupID string, chatCmd string) {
             }
             sendToTelegram(groupID, msgResponse)
         case Same:
-            // fmt.Println("[Dieu khien thanh cong]")
             scriptVN, checkKeyExistsVN := cmdListMapVN[resStr];
             scriptEN, _ := cmdListMapEN[chatCmd];
             if checkKeyExistsVN == true {
