@@ -83,11 +83,9 @@ func cmdListMapInit(controlLedArr []LedControlCode,
     cmdListMap := make(map[string]*LedControlCode)
 
     for i := 0 ; i < len(controlLedArr); i++ {
-        for j := 0; j < len(controlLedArr[i].ChatCmd); j++ {
-            cmdListMap[controlLedArr[i].ChatCmd[j]] = &controlLedArr[i]
-            listChatCmds = append(listChatCmds, controlLedArr[i].ChatCmd[j])
-        }
-        cmdStr += "/" + controlLedArr[i].ChatCmd[0]
+        cmdListMap[controlLedArr[i].ChatCmd] = &controlLedArr[i]
+        listChatCmds = append(listChatCmds, controlLedArr[i].ChatCmd)
+        cmdStr += "/" + controlLedArr[i].ChatCmd
     }
     cfg.CmdConfig.DefaultRespMsg[resMsgUnknowCmd] += cmdStr
     for _, controlLed :=range controlLedArr {
@@ -147,11 +145,8 @@ func getNormStr(inputStr string) string {
 }
 
 func handleTeleScript(script *LedControlCode, groupID string, chatCmd string) {
-
     sendToSerial(script.DeviceCmd)
-
     resRxChan := readSerialRXChannel(cfg.CmdConfig.TickTimeout)
-
     resDataTele, checkKeyExists := script.ChatResponseMap[resRxChan];
 
     switch checkKeyExists {
