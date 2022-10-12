@@ -1,0 +1,13 @@
+TelegramConfig    :
+  BotName         : 'Quang_bot'
+  # BotToken        : '5379690042:AAHsmvcazskbA3zmC6IyINMp8k0rezViCGk'
+  BotToken        : '5765659274:AAF1MrBZwC52uunp-t2CE6KhQn2yEmvKaik'
+  IdBotChat       : 2105095097
+
+MqttConfig        : 
+  Broker          : 'localhost:1883'
+  User            : 'nmtamn' 
+  Password        : '221220'
+  TeleSrcTopic    : 'Telegram/GroupID/Rx'
+  TeleDstTopic    : 'Telegram/+/Tx'  
+

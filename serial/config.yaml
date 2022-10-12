@@ -1,0 +1,8 @@
+MqttConfig        : 
+  Broker          : 'localhost:1883'
+  SerialDstTopic  : "Serial/COM4/Tx"
+  SeialSrcTopic   : "Serial/COM4/Rx"  
+
+SerialConfig      :
+  ComName         : 'COM4'
+  Baudrate        : 9600 
