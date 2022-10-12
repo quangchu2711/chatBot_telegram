@@ -3,8 +3,8 @@ MqttConfig        :
   Broker          : 'localhost:1883'
   User            : 'nmtam'
   Password        : '221220'
-  SerialSrcTopic  : 'Serial/COM4/Rx'
-  SerialDstTopic  : 'Serial/COM4/Tx'
+  LedDeviceSrcTopic  : 'LedDevice/COM4/Rx'
+  LedDeviceDstTopic  : 'LedDevice/COM4/Tx'
 
   TeleSrcTopic    : 'Telegram/+/Rx'
   TeleDstTopic    : 'Telegram/GroupID/Tx'    
