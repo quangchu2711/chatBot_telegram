@@ -92,7 +92,7 @@ var messageSensorDevicePubHandler mqtt.MessageHandler = func(client mqtt.Client,
 func checkDeviceName(script *DeviceCmdCode) DeviceName {
     var deviceName DeviceName
 
-    _, checkKey := script.ChatResponseMap["Value"]
+    _, checkKey := script.ChatResponseMap["Data"]
     if checkKey == true {
         deviceName = SENSOR_DEVICE
     }else {
@@ -174,23 +174,26 @@ func handleDeviceScript(script *DeviceCmdCode, groupID string) {
 
     deviceName := checkDeviceName(script) 
     switch deviceName {
-        case LED_DEVICE:
-            sendToLedDevice(script.DeviceCmd)
-            responseChannel = readDeviceChannel(ledDeviceChannel, cfg.CmdConfig.TickTimeout)            
-        case SENSOR_DEVICE:
-            sendToSensorDevice(script.DeviceCmd)
-            responseChannel = readDeviceChannel(sensorDeviceChannel, cfg.CmdConfig.TickTimeout)
-            script.ChatResponseMap["Value"] += responseChannel
-            responseChannel = "Value"
+    case LED_DEVICE:
+        sendToLedDevice(script.DeviceCmd)
+        responseChannel = readDeviceChannel(ledDeviceChannel, cfg.CmdConfig.TickTimeout)            
+    case SENSOR_DEVICE:
+        sendToSensorDevice(script.DeviceCmd)
+        responseChannel = readDeviceChannel(sensorDeviceChannel, cfg.CmdConfig.TickTimeout)
+        if responseChannel != "Timeout" {
+            dataMsg := strings.Split(script.ChatResponseMap["Data"], ":") 
+            script.ChatResponseMap["Data"] = dataMsg[0] + ": " + responseChannel
+            responseChannel = "Data"
+        }
     }
     fmt.Printf("[Response channel: %s]", responseChannel)
     resDataTele, checkKeyExists := script.ChatResponseMap[responseChannel];
     switch checkKeyExists {
-        case true:
-            sendToTelegram(groupID, resDataTele)
+    case true:
+        sendToTelegram(groupID, resDataTele)
 
-        default:
-            sendToTelegram(groupID, cfg.CmdConfig.DefaultRespMsg["ErrorCmd"])
+    default:
+        sendToTelegram(groupID, cfg.CmdConfig.DefaultRespMsg["ErrorCmd"])
     }
 } 
 
@@ -208,12 +211,12 @@ func handleTeleCmd(groupID string, chatCmd string) {
     resStr, strSearchResults := findTheMostSimilarString(chatCmd, listAllChatCmd)
 
     switch strSearchResults {
-        case DIFFERENT:
-            sendHelpResponseToUserTelegram(groupID) 
-        case ALMOST_SAME:
-            sendSuggestionResponseToUserTelegram(groupID, resStr)
-        case SAME:
-            handleDeviceCmd(groupID, resStr)         
+    case DIFFERENT:
+        sendHelpResponseToUserTelegram(groupID) 
+    case ALMOST_SAME:
+        sendSuggestionResponseToUserTelegram(groupID, resStr)
+    case SAME:
+        handleDeviceCmd(groupID, resStr)         
     }
 }
 
@@ -268,11 +271,11 @@ func readDeviceChannel(deviceChannel chan string, timeOut time.Duration) string 
     var msg string
 
     select {
-        case msg =  <-deviceChannel:
-            return msg;
-        case <-time.After(timeOut * time.Second):
-            msg = "Timeout"
-            return msg
+    case msg =  <-deviceChannel:
+        return msg;
+    case <-time.After(timeOut * time.Second):
+        msg = "Timeout"
+        return msg
     }
 }
 
