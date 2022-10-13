@@ -20,22 +20,24 @@ type Mqtt struct {
     Broker string
     User string
     Password string
-    SerialSrcTopic string
-    SerialDstTopic string
+    LedDeviceSrcTopic string
+    LedDeviceDstTopic string
     TeleSrcTopic string  
-    TeleDstTopic string   
+    TeleDstTopic string  
+    SensorDeviceSrcTopic string 
+    SensorDeviceDstTopic string
 }
 
 
-type LedControlCode struct {
+type DeviceCmdCode struct {
     ChatCmd string
     DeviceCmd string
     ChatResponseMap map[string]string
 }
 
 type Command struct {
-    ControlLedVN []LedControlCode
-    ControlLedEN []LedControlCode
+    DeviceCmdCodeArrVN []DeviceCmdCode
+    DeviceCmdCodeArrEN []DeviceCmdCode
     DefaultRespMsg map[string]string 
     TickTimeout time.Duration
 }
@@ -47,59 +49,64 @@ type FileConfig struct {
 
 type StringSearchResults int
 const (
-    AlmostSame StringSearchResults = iota
-    Same    
-    Different
+    ALMOST_SAME StringSearchResults = iota
+    SAME    
+    DIFFERENT
+)
+
+type DeviceName int
+const (
+    LED_DEVICE DeviceName = iota
+    SENSOR_DEVICE
 )
 
 var cfg FileConfig
-var mqttClientHandleTele mqtt.Client
-var mqttClientHandleSerial mqtt.Client
-
-var serialRXChannel chan string 
-var cmdListMapVN map[string]*LedControlCode
-var cmdListMapEN map[string]*LedControlCode
-var listChatCmds[] string 
+var ledDeviceMqttClient mqtt.Client
+var ledDeviceChannel chan string 
+var deviceCmdListVN map[string]*DeviceCmdCode
+var deviceCmdListEN map[string]*DeviceCmdCode
+var listAllChatCmd[] string
+var sensorDeviceChannel chan string 
+var sensorMqttClient mqtt.Client
+var telegramMqttClient mqtt.Client
 
 var messageTelePubHandler mqtt.MessageHandler = func(client mqtt.Client, msg mqtt.Message) {
-
     teleMsg := string(msg.Payload())
-
     fmt.Printf("Received message: [%s] from topic: %s\n", teleMsg, msg.Topic())
     groupID, _ := getGroupIdTelegram(msg.Topic())
     handleTeleCmd(groupID, teleMsg)
 }
 
-var messageSerialPubHandler mqtt.MessageHandler = func(client mqtt.Client, msg mqtt.Message) {
-    serialMsg := string(msg.Payload())
-    fmt.Printf("Received message: [%s] from topic: %s\n", serialMsg, msg.Topic())
-    handleSerialCmd(serialMsg)
+var messageLedDevicePubHandler mqtt.MessageHandler = func(client mqtt.Client, msg mqtt.Message) {
+    ledDeviceMsg := string(msg.Payload())
+    fmt.Printf("Received message: [%s] from topic: %s\n", ledDeviceMsg, msg.Topic())
+    writeDeviceChannel(ledDeviceChannel, ledDeviceMsg)
 }
 
-func cmdListMapInit(controlLedArr []LedControlCode,
-                    resMsgTimeout string,
-                    resMsgUnknowCmd string) map[string]*LedControlCode {
-    var cmdStr string
-    cmdListMap := make(map[string]*LedControlCode)
+var messageSensorDevicePubHandler mqtt.MessageHandler = func(client mqtt.Client, msg mqtt.Message) {
+    sensorDeviceMsg := string(msg.Payload())
+    fmt.Printf("Received message: [%s] from topic: %s\n", sensorDeviceMsg, msg.Topic())
+    writeDeviceChannel(sensorDeviceChannel, sensorDeviceMsg)
+}
 
-    for i := 0 ; i < len(controlLedArr); i++ {
-        cmdListMap[controlLedArr[i].ChatCmd] = &controlLedArr[i]
-        listChatCmds = append(listChatCmds, controlLedArr[i].ChatCmd)
-        cmdStr += "/" + controlLedArr[i].ChatCmd
-    }
-    cfg.CmdConfig.DefaultRespMsg[resMsgUnknowCmd] += cmdStr
-    for _, controlLed :=range controlLedArr {
-        controlLed.ChatResponseMap["Timeout"] =  cfg.CmdConfig.DefaultRespMsg[resMsgTimeout] 
+func checkDeviceName(script *DeviceCmdCode) DeviceName {
+    var deviceName DeviceName
+
+    _, checkKey := script.ChatResponseMap["Value"]
+    if checkKey == true {
+        deviceName = SENSOR_DEVICE
+    }else {
+        deviceName = LED_DEVICE
     } 
 
-    return cmdListMap      
+    return deviceName
 }
 
 func findTheMostSimilarString(str string, strArr[] string) (string, StringSearchResults) {
-    minNumStep := 7
+    minNumStep := 9
     resStr := "NULL"
     numTransStep := - 1
-    cmpSta := Different
+    cmpSta := DIFFERENT
 
     for i := 0; i < len(strArr); i++ {
         numTransStep = levenshtein.ComputeDistance(getNormStr(str), getNormStr(strArr[i]))
@@ -110,9 +117,9 @@ func findTheMostSimilarString(str string, strArr[] string) (string, StringSearch
         }
     }
     if minNumStep == 0 {
-        cmpSta = Same
+        cmpSta = SAME
     }else if minNumStep < 7 {
-        cmpSta = AlmostSame
+        cmpSta = ALMOST_SAME
     }
 
     return resStr, cmpSta
@@ -135,7 +142,6 @@ func getGroupIdTelegram (topic string) (string, error) {
 }
 
 func getNormStr(inputStr string) string {
-
         lowerStr := strings.ToLower(inputStr)
 
         t := transform.Chain(norm.NFD, runes.Remove(runes.In(unicode.Mn)), norm.NFC)
@@ -144,11 +150,41 @@ func getNormStr(inputStr string) string {
         return normStr      
 }
 
-func handleTeleScript(script *LedControlCode, groupID string, chatCmd string) {
-    sendToSerial(script.DeviceCmd)
-    resRxChan := readSerialRXChannel(cfg.CmdConfig.TickTimeout)
-    resDataTele, checkKeyExists := script.ChatResponseMap[resRxChan];
+func deviceCmdListInit(ledControlCodeArr []DeviceCmdCode,
+                        resTimeoutMsg string,
+                        resMsgUnknowCmd string) map[string]*DeviceCmdCode {
+    var cmdStr string
+    ledDeviceCmdListMap := make(map[string]*DeviceCmdCode)
 
+    for i := 0 ; i < len(ledControlCodeArr); i++ {
+        ledDeviceCmdListMap[ledControlCodeArr[i].ChatCmd] = &ledControlCodeArr[i]
+        listAllChatCmd = append(listAllChatCmd, ledControlCodeArr[i].ChatCmd)
+        cmdStr += "/" + ledControlCodeArr[i].ChatCmd
+    }
+    cfg.CmdConfig.DefaultRespMsg[resMsgUnknowCmd] += cmdStr
+    for _, ledControl := range ledControlCodeArr {
+        ledControl.ChatResponseMap["Timeout"] =  cfg.CmdConfig.DefaultRespMsg[resTimeoutMsg] 
+    }
+
+    return ledDeviceCmdListMap      
+}
+
+func handleDeviceScript(script *DeviceCmdCode, groupID string) {
+    var responseChannel string
+
+    deviceName := checkDeviceName(script) 
+    switch deviceName {
+        case LED_DEVICE:
+            sendToLedDevice(script.DeviceCmd)
+            responseChannel = readDeviceChannel(ledDeviceChannel, cfg.CmdConfig.TickTimeout)            
+        case SENSOR_DEVICE:
+            sendToSensorDevice(script.DeviceCmd)
+            responseChannel = readDeviceChannel(sensorDeviceChannel, cfg.CmdConfig.TickTimeout)
+            script.ChatResponseMap["Value"] += responseChannel
+            responseChannel = "Value"
+    }
+    fmt.Printf("[Response channel: %s]", responseChannel)
+    resDataTele, checkKeyExists := script.ChatResponseMap[responseChannel];
     switch checkKeyExists {
         case true:
             sendToTelegram(groupID, resDataTele)
@@ -158,34 +194,30 @@ func handleTeleScript(script *LedControlCode, groupID string, chatCmd string) {
     }
 } 
 
+func handleDeviceCmd(groupID string, ledDeviceCmd string) {
+    scriptVN, checkKeyExistsVN := deviceCmdListVN[ledDeviceCmd];
+    scriptEN, _ := deviceCmdListEN[ledDeviceCmd];
+    if checkKeyExistsVN == true {
+        handleDeviceScript(scriptVN, groupID)
+    }else {
+        handleDeviceScript(scriptEN, groupID)          
+    }     
+}
+
 func handleTeleCmd(groupID string, chatCmd string) {  
-    resStr, strSearchResults := findTheMostSimilarString(chatCmd, listChatCmds)
+    resStr, strSearchResults := findTheMostSimilarString(chatCmd, listAllChatCmd)
 
     switch strSearchResults {
-        case Different:
+        case DIFFERENT:
             sendHelpResponseToUserTelegram(groupID) 
-            
-        case AlmostSame:
-            SendSuggestionResponseToUserTelegram(groupID, resStr)
-
-        case Same:
-            scriptVN, checkKeyExistsVN := cmdListMapVN[resStr];
-            scriptEN, _ := cmdListMapEN[chatCmd];
-            if checkKeyExistsVN == true {
-                handleTeleScript(scriptVN, groupID, resStr)
-            }else {
-                handleTeleScript(scriptEN, groupID, resStr)          
-            }            
+        case ALMOST_SAME:
+            sendSuggestionResponseToUserTelegram(groupID, resStr)
+        case SAME:
+            handleDeviceCmd(groupID, resStr)         
     }
 }
 
-func handleSerialCmd(cmd string) {
-    serialRXChannel <-cmd
-}
-
-
 func mqttBegin(broker string, user string, pw string, messagePubHandler *mqtt.MessageHandler) mqtt.Client {
-
     var opts *mqtt.ClientOptions = new(mqtt.ClientOptions)
 
     opts = mqtt.NewClientOptions()
@@ -193,33 +225,25 @@ func mqttBegin(broker string, user string, pw string, messagePubHandler *mqtt.Me
     opts.SetUsername(user)
     opts.SetPassword(pw) 
     opts.SetDefaultPublishHandler(*messagePubHandler)
-
     client := mqtt.NewClient(opts)
     if token := client.Connect(); token.Wait() && token.Error() != nil {
         panic(token.Error())
     }
+
     return client
 }
 
-func readSerialRXChannel(timeOut time.Duration) string {
-    var msg string
-
-    select {
-        case msg =  <-serialRXChannel:
-            return msg;
-        case <-time.After(timeOut * time.Second):
-            msg = "Timeout"
-            return msg
-    }
+func sendToLedDevice(msg string) {
+    telegramMqttClient.Publish(cfg.MqttConfig.LedDeviceDstTopic, 0, false, msg)
 }
 
-func sendToSerial(msg string) {
-    mqttClientHandleTele.Publish(cfg.MqttConfig.SerialDstTopic, 0, false, msg)
+func sendToSensorDevice(msg string) {
+    telegramMqttClient.Publish(cfg.MqttConfig.SensorDeviceDstTopic, 0, false, msg)
 }
 
 func sendToTelegram(groupID string, msg string) {
     teleDstTopic := strings.Replace(cfg.MqttConfig.TeleDstTopic, "GroupID", groupID, 1)
-    mqttClientHandleSerial.Publish(teleDstTopic, 0, false, msg)
+    ledDeviceMqttClient.Publish(teleDstTopic, 0, false, msg)
 }
 
 func sendHelpResponseToUserTelegram(groupID string) {
@@ -229,9 +253,9 @@ func sendHelpResponseToUserTelegram(groupID string) {
     sendToTelegram(groupID, helpResEN)     
 }
 
-func SendSuggestionResponseToUserTelegram(groupID string, resMsg string) {
+func sendSuggestionResponseToUserTelegram(groupID string, resMsg string) {
     var msgResponse string
-    _, checkKeyVN := cmdListMapVN[resMsg];
+    _, checkKeyVN := deviceCmdListVN[resMsg];
     if checkKeyVN == true {
         msgResponse = "[" + cfg.CmdConfig.DefaultRespMsg["HintQuestionVN"] + "/" + resMsg + "]"                  
     }else {
@@ -240,6 +264,21 @@ func SendSuggestionResponseToUserTelegram(groupID string, resMsg string) {
     sendToTelegram(groupID, msgResponse)
 }
 
+func readDeviceChannel(deviceChannel chan string, timeOut time.Duration) string {
+    var msg string
+
+    select {
+        case msg =  <-deviceChannel:
+            return msg;
+        case <-time.After(timeOut * time.Second):
+            msg = "Timeout"
+            return msg
+    }
+}
+
+func writeDeviceChannel(deviceChannel chan string, cmd string) {
+    deviceChannel <-cmd
+}
 
 func yamlFileHandle() {
     yfile, err := ioutil.ReadFile("config.yaml")
@@ -259,18 +298,25 @@ func yamlFileHandle() {
 }
 
 func main() {
-    serialRXChannel = make(chan string, 1)
     yamlFileHandle()
-    cmdListMapVN = cmdListMapInit(cfg.CmdConfig.ControlLedVN, "TimeoutVN", "ResponseHelpVN")
-    cmdListMapEN = cmdListMapInit(cfg.CmdConfig.ControlLedEN, "TimeoutEN", "ResponseHelpEN")
-    mqttClientHandleTele = mqttBegin(cfg.MqttConfig.Broker, cfg.MqttConfig.User, cfg.MqttConfig.Password, &messageTelePubHandler)
-    mqttClientHandleTele.Subscribe(cfg.MqttConfig.TeleSrcTopic, 1, nil)
-    mqttClientHandleSerial = mqttBegin(cfg.MqttConfig.Broker, cfg.MqttConfig.User, cfg.MqttConfig.Password, &messageSerialPubHandler)
-    mqttClientHandleSerial.Subscribe(cfg.MqttConfig.SerialSrcTopic, 1, nil)
+
+    ledDeviceChannel = make(chan string, 1)
+    sensorDeviceChannel = make(chan string, 1)
+
+    deviceCmdListVN = deviceCmdListInit(cfg.CmdConfig.DeviceCmdCodeArrVN, "TimeoutVN", "ResponseHelpVN")
+    deviceCmdListEN = deviceCmdListInit(cfg.CmdConfig.DeviceCmdCodeArrEN, "TimeoutEN", "ResponseHelpEN")
+
+    ledDeviceMqttClient = mqttBegin(cfg.MqttConfig.Broker, cfg.MqttConfig.User, cfg.MqttConfig.Password, &messageLedDevicePubHandler)
+    ledDeviceMqttClient.Subscribe(cfg.MqttConfig.LedDeviceSrcTopic, 1, nil)
+    
+    telegramMqttClient = mqttBegin(cfg.MqttConfig.Broker, cfg.MqttConfig.User, cfg.MqttConfig.Password, &messageTelePubHandler)
+    telegramMqttClient.Subscribe(cfg.MqttConfig.TeleSrcTopic, 1, nil)
+
+    sensorMqttClient = mqttBegin(cfg.MqttConfig.Broker, cfg.MqttConfig.User, cfg.MqttConfig.Password, &messageSensorDevicePubHandler)
+    sensorMqttClient.Subscribe(cfg.MqttConfig.SensorDeviceSrcTopic, 1, nil)
+    
     fmt.Println("Connected")
-
     for {
-
         time.Sleep(2 * time.Second)
     }
 }
