@@ -14,11 +14,11 @@ var messageNodeDevicePubHandler mqtt.MessageHandler = func(client mqtt.Client, m
     sensorDeviceMsg := string(msg.Payload())
     fmt.Printf("Received message: [%s] from topic: %s\n", sensorDeviceMsg, msg.Topic())
     valueSensor += 1
-    if sensorDeviceMsg == "HUMP" {
-        sendToBot(strconv.Itoa(valueSensor))
+    if sensorDeviceMsg == "HUM" {
+        sendToBot(strconv.Itoa(valueSensor) + "%")
     }
     if sensorDeviceMsg == "TEMP" {
-        sendToBot("26")
+        sendToBot("26℃")
     }
 }
 
@@ -39,8 +39,8 @@ func mqttBegin(broker string, user string, pw string, messagePubHandler *mqtt.Me
 }
 
 func sendToBot(strMsg string ) {
-    nodeMqttClient.Publish("TestSensor/Rx", 0, false, strMsg)
-    fmt.Println("Publish: TestSensor/Rx" + ": " + strMsg)  
+    nodeMqttClient.Publish("xuong/device/esp1170372/sensors/telegram/rx", 0, false, strMsg)
+    fmt.Println("Publish: xuong/device/esp1170372/sensors/telegram/rx" + ": " + strMsg)  
 }
 
 func main() {
