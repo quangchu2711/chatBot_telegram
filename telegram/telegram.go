@@ -86,11 +86,8 @@ func mqttBegin(broker string, user string, pw string) mqtt.Client {
 
     opts = mqtt.NewClientOptions()
     opts.AddBroker(fmt.Sprintf(broker))
-    // opts.SetUsername(cfg.MqttConfig.User)
-    opts.SetUsername(user)
-    // opts.SetPassword(cfg.MqttConfig.Password)   
+    opts.SetUsername(user) 
     opts.SetPassword(pw)   
-    // opts.SetCleanSession(true)
 
     opts.SetDefaultPublishHandler(messagePubHandler)
     client := mqtt.NewClient(opts)
@@ -119,15 +116,19 @@ func sendInlineButtonMsgToTelegramGroup(groupID int64, textDisplay string, cmdAr
         inlineCmd.CallbackData = &cmd
         rowInlineCmd = append(rowInlineCmd, inlineCmd)
     }
-    for i := 0; i < len(rowInlineCmd); i++ {
-        sliceRowInlineCmd := rowInlineCmd[i:(i+1)]
+    jump := 2
+    if len(cmdArr) % 2  != 0 {
+        jump = 1
+    }
+    for i := 0; i < len(rowInlineCmd); i+=jump {
+        sliceRowInlineCmd := rowInlineCmd[i:(i+jump)]
         keyboard = append(keyboard, sliceRowInlineCmd)
     }
     messageSendTele.ReplyMarkup = tgbotapi.InlineKeyboardMarkup{
         InlineKeyboard: keyboard,
     }
 
-    bot.Send(messageSendTele)  
+    bot.Send(messageSendTele) 
 }
 
 
