@@ -46,7 +46,7 @@ func sendToBot(strMsg string ) {
 func main() {
     valueSensor = 40
     nodeMqttClient = mqttBegin("localhost:1883", "nmtam", "221220", &messageNodeDevicePubHandler)
-    nodeMqttClient.Subscribe("TestSensor/Tx", 1, nil)
+    nodeMqttClient.Subscribe("xuong/device/esp1170372/sensors/telegram/tx", 1, nil)
     
     fmt.Println("Connected")
     for {
