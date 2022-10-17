@@ -14,6 +14,7 @@ import (
     "golang.org/x/text/transform"
     "golang.org/x/text/unicode/norm"
     "unicode"
+    "sort"
 )
 
 type Mqtt struct {
@@ -40,6 +41,7 @@ type Command struct {
     DeviceCmdCodeArrEN []DeviceCmdCode
     DefaultRespMsg map[string]string 
     TickTimeout time.Duration
+    StringRateThreshold float32
 }
 
 type FileConfig struct {
@@ -47,11 +49,11 @@ type FileConfig struct {
     CmdConfig Command
 }
 
-type StringSearchResults int
+type StringSearchResult int
 const (
-    ALMOST_SAME StringSearchResults = iota
-    SAME    
-    DIFFERENT
+    AlmostSame StringSearchResult = iota
+    Same    
+    Different
 )
 
 type DeviceName int
@@ -60,12 +62,17 @@ const (
     SENSOR_DEVICE
 )
 
+type StringCompare struct {
+    Data string
+    RatePercent float32
+}
+
 var cfg FileConfig
+var chatCmdlist[] string
 var ledDeviceMqttClient mqtt.Client
 var ledDeviceChannel chan string 
-var deviceCmdListVN map[string]*DeviceCmdCode
-var deviceCmdListEN map[string]*DeviceCmdCode
-var listAllChatCmd[] string
+var cmdListMapVN map[string]*DeviceCmdCode
+var cmdListMapEN map[string]*DeviceCmdCode
 var sensorDeviceChannel chan string 
 var sensorMqttClient mqtt.Client
 var telegramMqttClient mqtt.Client
@@ -89,6 +96,7 @@ var messageSensorDevicePubHandler mqtt.MessageHandler = func(client mqtt.Client,
     writeDeviceChannel(sensorDeviceChannel, sensorDeviceMsg)
 }
 
+
 func checkDeviceName(script *DeviceCmdCode) DeviceName {
     var deviceName DeviceName
 
@@ -100,29 +108,6 @@ func checkDeviceName(script *DeviceCmdCode) DeviceName {
     } 
 
     return deviceName
-}
-
-func findTheMostSimilarString(str string, strArr[] string) (string, StringSearchResults) {
-    minNumStep := 9
-    resStr := "NULL"
-    numTransStep := - 1
-    cmpSta := DIFFERENT
-
-    for i := 0; i < len(strArr); i++ {
-        numTransStep = levenshtein.ComputeDistance(getNormStr(str), getNormStr(strArr[i]))
-        // fmt.Printf("[%s - %d]\n", getNormStr(strArr[i]), numTransStep)
-        if numTransStep < minNumStep {
-            minNumStep = numTransStep
-            resStr = strArr[i]
-        }
-    }
-    if minNumStep == 0 {
-        cmpSta = SAME
-    }else if minNumStep < 7 {
-        cmpSta = ALMOST_SAME
-    }
-
-    return resStr, cmpSta
 }
 
 func getGroupIdTelegram (topic string) (string, error) {
@@ -150,42 +135,37 @@ func getNormStr(inputStr string) string {
         return normStr      
 }
 
-func deviceCmdListInit(ledControlCodeArr []DeviceCmdCode,
-                        resTimeoutMsg string,
-                        resMsgUnknowCmd string) map[string]*DeviceCmdCode {
-    var cmdStr string
-    ledDeviceCmdListMap := make(map[string]*DeviceCmdCode)
+func getCommandSearchStatus(rateOfChange float32) StringSearchResult {
+    cmdSearchRes := Different
+    strRateThres := cfg.CmdConfig.StringRateThreshold
 
-    for i := 0 ; i < len(ledControlCodeArr); i++ {
-        ledDeviceCmdListMap[ledControlCodeArr[i].ChatCmd] = &ledControlCodeArr[i]
-        listAllChatCmd = append(listAllChatCmd, ledControlCodeArr[i].ChatCmd)
-        cmdStr += "/" + ledControlCodeArr[i].ChatCmd
-    }
-    cfg.CmdConfig.DefaultRespMsg[resMsgUnknowCmd] += cmdStr
-    for _, ledControl := range ledControlCodeArr {
-        ledControl.ChatResponseMap["Timeout"] =  cfg.CmdConfig.DefaultRespMsg[resTimeoutMsg] 
+    if rateOfChange == 100.0 {
+        cmdSearchRes = Same
+    }else if rateOfChange >= strRateThres {
+        cmdSearchRes = AlmostSame
     }
 
-    return ledDeviceCmdListMap      
+    return cmdSearchRes
+}
+
+func deviceCmdListInit(deviceCmdCodeArr []DeviceCmdCode,
+                    msgTimeout string) map[string]*DeviceCmdCode {
+    cmdListMap := make(map[string]*DeviceCmdCode)
+
+    for i := 0 ; i < len(deviceCmdCodeArr); i++ {
+        cmdListMap[deviceCmdCodeArr[i].ChatCmd] = &deviceCmdCodeArr[i]
+        chatCmdlist = append(chatCmdlist, deviceCmdCodeArr[i].ChatCmd)
+    }
+    for _, controlLed :=range deviceCmdCodeArr {
+        controlLed.ChatResponseMap["Timeout"] =  cfg.CmdConfig.DefaultRespMsg[msgTimeout] 
+    } 
+
+    return cmdListMap      
 }
 
 func handleDeviceScript(script *DeviceCmdCode, groupID string) {
-    var responseChannel string
+    responseChannel := readResponseFromDeviceChannel(script)
 
-    deviceName := checkDeviceName(script) 
-    switch deviceName {
-    case LED_DEVICE:
-        sendToLedDevice(script.DeviceCmd)
-        responseChannel = readDeviceChannel(ledDeviceChannel, cfg.CmdConfig.TickTimeout)            
-    case SENSOR_DEVICE:
-        sendToSensorDevice(script.DeviceCmd)
-        responseChannel = readDeviceChannel(sensorDeviceChannel, cfg.CmdConfig.TickTimeout)
-        if responseChannel != "Timeout" {
-            dataMsg := strings.Split(script.ChatResponseMap["Data"], ":") 
-            script.ChatResponseMap["Data"] = dataMsg[0] + ": " + responseChannel
-            responseChannel = "Data"
-        }
-    }
     fmt.Printf("[Response channel: %s]", responseChannel)
     resDataTele, checkKeyExists := script.ChatResponseMap[responseChannel];
     switch checkKeyExists {
@@ -197,9 +177,9 @@ func handleDeviceScript(script *DeviceCmdCode, groupID string) {
     }
 } 
 
-func handleDeviceCmd(groupID string, ledDeviceCmd string) {
-    scriptVN, checkKeyExistsVN := deviceCmdListVN[ledDeviceCmd];
-    scriptEN, _ := deviceCmdListEN[ledDeviceCmd];
+func handleDeviceCmd(groupID string, cmd string) {
+    scriptVN, checkKeyExistsVN := cmdListMapVN[cmd];
+    scriptEN, _ := cmdListMapEN[cmd];
     if checkKeyExistsVN == true {
         handleDeviceScript(scriptVN, groupID)
     }else {
@@ -207,16 +187,19 @@ func handleDeviceCmd(groupID string, ledDeviceCmd string) {
     }     
 }
 
-func handleTeleCmd(groupID string, chatCmd string) {  
-    resStr, strSearchResults := findTheMostSimilarString(chatCmd, listAllChatCmd)
+func handleTeleCmd(groupID string, cmd string) {  
+    chatCmd := removeElementAfterBracket(cmd)  
+    chatCmdArr := sortCommandCompareArrayDescending(chatCmd, chatCmdlist)
+    maxRatePercent :=  chatCmdArr[0].RatePercent
+    cmdSearchRes := getCommandSearchStatus(maxRatePercent)
 
-    switch strSearchResults {
-    case DIFFERENT:
-        sendHelpResponseToUserTelegram(groupID) 
-    case ALMOST_SAME:
-        sendSuggestionResponseToUserTelegram(groupID, resStr)
-    case SAME:
-        handleDeviceCmd(groupID, resStr)         
+    switch cmdSearchRes {
+    case Different:
+        sendHelpResponseToTelegramUser(groupID)
+    case AlmostSame:
+        sendSuggestResponseToTelegramUser(groupID, chatCmdArr)
+    case Same:
+        handleDeviceCmd(groupID, chatCmdArr[0].Data)         
     }
 }
 
@@ -236,36 +219,88 @@ func mqttBegin(broker string, user string, pw string, messagePubHandler *mqtt.Me
     return client
 }
 
+func sendHelpResponseToTelegramUser(groupID string) {
+    var cmdKeyboard string
+    textVN := cfg.CmdConfig.DefaultRespMsg["ResponseHelpVN"]
+    textEN := cfg.CmdConfig.DefaultRespMsg["ResponseHelpEN"]
+    textKeyboard := textVN + "\n" + textEN
+    
+    for _, cmd := range chatCmdlist {
+        cmdKeyboard += "/" + cmd
+    }
+
+    sendToTelegram(groupID, "[" + textKeyboard + cmdKeyboard + "]")   
+}
+
+func sendSuggestResponseToTelegramUser (groupID string, chatCmdArr []StringCompare) {
+    var textKeyboard string
+    var cmdKeyboard string 
+    chatCmd := chatCmdArr[0].Data
+
+    _, checkKeyExistsVN := cmdListMapVN[chatCmd]
+    if checkKeyExistsVN == true {
+        textKeyboard = cfg.CmdConfig.DefaultRespMsg["SuggestVN"]
+    }else {
+        textKeyboard = cfg.CmdConfig.DefaultRespMsg["SuggestEN"]        
+    }
+    for i := 0; i < 3; i++ {
+        rateValue := fmt.Sprintf("%.2f", chatCmdArr[i].RatePercent)
+        cmdKeyboard += "/" + chatCmdArr[i].Data + " (" + rateValue + " %" + ")" 
+    }
+
+    sendToTelegram(groupID, "[" + textKeyboard + cmdKeyboard + "]")    
+}
+
 func sendToLedDevice(msg string) {
-    telegramMqttClient.Publish(cfg.MqttConfig.LedDeviceDstTopic, 0, false, msg)
+    ledDeviceMqttClient.Publish(cfg.MqttConfig.LedDeviceDstTopic, 0, false, msg)
 }
 
 func sendToSensorDevice(msg string) {
-    telegramMqttClient.Publish(cfg.MqttConfig.SensorDeviceDstTopic, 0, false, msg)
+    sensorMqttClient.Publish(cfg.MqttConfig.SensorDeviceDstTopic, 0, false, msg)
 }
 
 func sendToTelegram(groupID string, msg string) {
     teleDstTopic := strings.Replace(cfg.MqttConfig.TeleDstTopic, "GroupID", groupID, 1)
-    ledDeviceMqttClient.Publish(teleDstTopic, 0, false, msg)
+    telegramMqttClient.Publish(teleDstTopic, 0, false, msg)
 }
 
-func sendHelpResponseToUserTelegram(groupID string) {
-    helpResVN := "[" + cfg.CmdConfig.DefaultRespMsg["ResponseHelpVN"] + "]"
-    helpResEN := "[" + cfg.CmdConfig.DefaultRespMsg["ResponseHelpEN"] + "]"
-    sendToTelegram(groupID, helpResVN)
-    sendToTelegram(groupID, helpResEN)     
-}
+func sortChatCmdlist () []string{
+    var cmdList []string
+    halfLength := len(chatCmdlist) / 2
 
-func sendSuggestionResponseToUserTelegram(groupID string, resMsg string) {
-    var msgResponse string
-    _, checkKeyVN := deviceCmdListVN[resMsg];
-    if checkKeyVN == true {
-        msgResponse = "[" + cfg.CmdConfig.DefaultRespMsg["HintQuestionVN"] + "/" + resMsg + "]"                  
-    }else {
-        msgResponse = "[" + cfg.CmdConfig.DefaultRespMsg["HintQuestionEN"] + "/" + resMsg + "]"
+    for i := 0; i < halfLength; i++ {
+        cmdList = append(cmdList, chatCmdlist[i])        
+        cmdList = append(cmdList, chatCmdlist[i + halfLength])        
     }
-    sendToTelegram(groupID, msgResponse)
+
+    return cmdList
 }
+
+func sortCommandCompareArrayDescending(str string, strArr[] string) ([]StringCompare) {
+    var strCmp StringCompare
+    var chatCmdArr []StringCompare
+
+    for i := 0; i < len(strArr); i++ {
+        str1 := getNormStr(str)
+        str2 := getNormStr(strArr[i])
+        numTranStep := levenshtein.ComputeDistance(str1, str2)
+        lenStr2 := len(str2)
+        strCmp.Data = strArr[i]
+        if numTranStep > lenStr2 {
+            strCmp.RatePercent = 0.0
+        }else {
+            strCmp.RatePercent = 100.0 - (float32(numTranStep) / float32(len(str2)) * 100.0)
+        }
+        chatCmdArr = append(chatCmdArr, strCmp)
+        // fmt.Printf("[%s - %d - %.2f]\n", getNormStr(strArr[i]), numTranStep, strCmp.RatePercent)
+    }
+    sort.SliceStable(chatCmdArr, func(i, j int) bool {
+        return chatCmdArr[i].RatePercent > chatCmdArr[j].RatePercent
+    })
+
+    return chatCmdArr
+}
+
 
 func readDeviceChannel(deviceChannel chan string, timeOut time.Duration) string {
     var msg string
@@ -277,6 +312,37 @@ func readDeviceChannel(deviceChannel chan string, timeOut time.Duration) string 
         msg = "Timeout"
         return msg
     }
+}
+
+func readResponseFromDeviceChannel(script *DeviceCmdCode) string {
+    var responseChannel string
+
+    deviceName := checkDeviceName(script) 
+    switch deviceName {
+    case LED_DEVICE:
+        sendToLedDevice(script.DeviceCmd)
+        responseChannel = readDeviceChannel(ledDeviceChannel, cfg.CmdConfig.TickTimeout)            
+    case SENSOR_DEVICE:
+        sendToSensorDevice(script.DeviceCmd)
+        responseChannel = readDeviceChannel(sensorDeviceChannel, cfg.CmdConfig.TickTimeout)
+        if responseChannel != "Timeout" {
+            dataMsg := strings.Split(script.ChatResponseMap["Data"], ":") 
+            script.ChatResponseMap["Data"] = dataMsg[0] + ": " + responseChannel
+            responseChannel = "Data"
+        }
+    }
+    return responseChannel
+}
+
+func removeElementAfterBracket(strInput string) string {
+    var strOutput string
+    index := strings.Index(strInput, "(")
+    if index == -1 {
+        strOutput = strInput
+    }else {
+        strOutput = strInput[0:(index-1)]        
+    }
+    return strOutput
 }
 
 func writeDeviceChannel(deviceChannel chan string, cmd string) {
@@ -306,8 +372,9 @@ func main() {
     ledDeviceChannel = make(chan string, 1)
     sensorDeviceChannel = make(chan string, 1)
 
-    deviceCmdListVN = deviceCmdListInit(cfg.CmdConfig.DeviceCmdCodeArrVN, "TimeoutVN", "ResponseHelpVN")
-    deviceCmdListEN = deviceCmdListInit(cfg.CmdConfig.DeviceCmdCodeArrEN, "TimeoutEN", "ResponseHelpEN")
+    cmdListMapVN = deviceCmdListInit(cfg.CmdConfig.DeviceCmdCodeArrVN, "TimeoutVN")
+    cmdListMapEN = deviceCmdListInit(cfg.CmdConfig.DeviceCmdCodeArrEN, "TimeoutEN")
+    chatCmdlist = sortChatCmdlist()
 
     ledDeviceMqttClient = mqttBegin(cfg.MqttConfig.Broker, cfg.MqttConfig.User, cfg.MqttConfig.Password, &messageLedDevicePubHandler)
     ledDeviceMqttClient.Subscribe(cfg.MqttConfig.LedDeviceSrcTopic, 1, nil)
@@ -321,5 +388,5 @@ func main() {
     fmt.Println("Connected")
     for {
         time.Sleep(2 * time.Second)
-    }
+    }    
 }

@@ -1,65 +1,87 @@
+MqttConfig              : 
+  Broker                : 'localhost:1883'
+  User                  : 'nmtam'
+  Password              : '221220'
+  LedDeviceSrcTopic     : 'LedDevice/COM4/Rx'
+  LedDeviceDstTopic     : 'LedDevice/COM4/Tx'
 
-MqttConfig        : 
-  Broker          : 'localhost:1883'
-  User            : 'nmtam'
-  Password        : '221220'
-  LedDeviceSrcTopic  : 'LedDevice/COM4/Rx'
-  LedDeviceDstTopic  : 'LedDevice/COM4/Tx'
-
-  TeleSrcTopic    : 'Telegram/+/Rx'
-  TeleDstTopic    : 'Telegram/GroupID/Tx'    
+  TeleSrcTopic          : 'Telegram/+/Rx'
+  TeleDstTopic          : 'Telegram/GroupID/Tx'   
+  SensorDeviceSrcTopic  : 'xuong/device/esp1170372/sensors/telegram/rx' 
+  SensorDeviceDstTopic  : 'xuong/device/esp1170372/sensors/telegram/tx' 
 
 CmdConfig:
 
-  ControlLedVN:
-    - ChatCmd          : 'Bật đèn 1'
-      DeviceCmd        : 'ONLED: 1'
-      ChatResponseMap:
-         '1'           : 'Đèn 1 đã bật'
+  DeviceCmdCodeArrVN:
+    - ChatCmd           : 'Bật đèn phòng khách'
+      DeviceCmd         : 'ON1'
+      ChatResponseMap   :
+         'ON1'          : 'Đèn phòng khách đã bật'
 
-    - ChatCmd          : 'Tắt đèn 1'
-      DeviceCmd        : 'OFFLED: 1'
-      ChatResponseMap:
-         '0'           : 'Đèn 1 đã tắt'
+    - ChatCmd           :  'Tắt đèn phòng khách'
+      DeviceCmd         : 'OFF1'
+      ChatResponseMap   :
+         'OFF1'         : 'Đèn phòng khách đã tắt'
 
-    - ChatCmd          : 'Bật đèn 2'   
-      DeviceCmd        : 'ONLED: 2'
-      ChatResponseMap:
-         '1'           : 'Đèn 2 đã bật'
+    - ChatCmd           : 'Bật đèn phòng bếp'   
+      DeviceCmd         : 'ON2'
+      ChatResponseMap   :
+         'ON2'          : 'Đèn phòng bếp đã bật'
 
-    - ChatCmd          : 'Tắt đèn 2'
-      DeviceCmd        : 'OFFLED: 2'
-      ChatResponseMap:
-         '0'           : 'Đèn 2 đã tắt'
+    - ChatCmd           : 'Tắt đèn phòng bếp'
+      DeviceCmd         : 'OFF2'
+      ChatResponseMap   :
+         'OFF2'         : 'Đèn phòng bếp đã tắt'
 
-  ControlLedEN:
-    - ChatCmd          : 'Led 1 on'
-      DeviceCmd        : 'ONLED: 1'
-      ChatResponseMap:
-         '1a'          : 'Led 1 was on'
+    - ChatCmd           : 'Xem nhiệt độ'
+      DeviceCmd         : 'TEMP'
+      ChatResponseMap   :
+        'Data'          : 'Nhiệt độ hôm nay là: '
 
-    - ChatCmd          : 'Led 1 off'
-      DeviceCmd        : 'OFFLED: 1'
-      ChatResponseMap:
-         '0'           : 'Led 1 was off'        
+    - ChatCmd           : 'Xem độ ẩm'
+      DeviceCmd         : 'HUM'
+      ChatResponseMap   :
+        'Data'          : 'Độ ẩm hôm nay là: '
 
-    - ChatCmd          : 'Led 2 on'
-      DeviceCmd        : 'ONLED: 2'
-      ChatResponseMap:
-         '1'           : 'Led 2 was on'
+  DeviceCmdCodeArrEN:
+    - ChatCmd           : 'Light living room on'
+      DeviceCmd         : 'ON1'
+      ChatResponseMap   :
+         'ON1'          : 'Light living room was on'
 
-    - ChatCmd          : 'Led 2 off'
-      DeviceCmd        : 'OFFLED: 2'
-      ChatResponseMap:
-         '0'           : 'Led 2 was off' 
+    - ChatCmd           : 'Light living room off'
+      DeviceCmd         : 'OFF1'
+      ChatResponseMap   :
+         'OFF1'         : 'Light living room was off'        
+
+    - ChatCmd           : 'Light kitchen on'
+      DeviceCmd         : 'ON2'
+      ChatResponseMap   :
+         'ON2'          : 'Light kitchen was on'
+
+    - ChatCmd           : 'Light kitchen on'
+      DeviceCmd         : 'OFF2'
+      ChatResponseMap   :
+         'OFF2'         : 'Light kitchen was off'
+
+    - ChatCmd           : 'Show temp'
+      DeviceCmd         : 'TEMP'
+      ChatResponseMap   :
+        'Data'          : 'The temperature today is:'
+
+    - ChatCmd           : 'Show hum'
+      DeviceCmd         : 'HUMI'
+      ChatResponseMap   :
+        'Data'          : 'The Humidity today is: '
 
   DefaultRespMsg:
     'ErrorCmd'         : 'Wrong command. Please try again!'
     'TimeoutVN'        : 'Quá thời gian, không nhận được phản hồi từ thiết bị'
     'TimeoutEN'        : 'Time out, no response from device'
-    'ResponseHelpVN'   : 'Yêu cầu không rõ, bạn có thể thử:'
-    'ResponseHelpEN'   : 'Request unknown, you can request:'   
-    'HintQuestionVN'   : 'Có phải bạn muốn ?'
-    'HintQuestionEN'   : 'Do you want ?'
+    'ResponseHelpVN'   : 'Yêu cầu không rõ, bạn có thể thử'
+    'ResponseHelpEN'   : 'Request unknown, you can request'   
+    'SuggestVN'        : 'Có phải bạn muốn:'
+    'SuggestEN'        : 'Do you want:'
 
   TickTimeout: 2 
+  StringRateThreshold: 50.0
